@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏥 SISTEMA OCI v3.0 - Painel de Monitoramento</title>
+    <title>🏥 SISTEMA OCI v3.1 - Painel de Monitoramento</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -38,6 +38,8 @@
         .sidebar-item.active { background: rgba(59,130,246,0.15); border-left: 4px solid #3b82f6; }
         .screen { display: none; }
         .screen.active { display: flex; justify-content: center; align-items: center; }
+        .alert-card { border-left: 4px solid; animation: pulse-alert 2s infinite; }
+        @keyframes pulse-alert { 0%,100%{opacity:1} 50%{opacity:0.85} }
     </style>
 </head>
 <body class="h-screen flex overflow-hidden">
@@ -50,7 +52,7 @@
     <div class="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl text-center border border-slate-100">
         <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">🏥</div>
         <h1 class="text-2xl font-extrabold text-slate-800 mb-1">Sistema OCI</h1>
-        <p class="text-slate-500 text-sm mb-8">Painel de Monitoramento Hospitalar v3.0</p>
+        <p class="text-slate-500 text-sm mb-8">Painel de Monitoramento Hospitalar v3.1</p>
         <div class="text-left space-y-4">
             <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nome Completo</label><input type="text" id="loginNome" placeholder="Administrador OCI" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none"></div>
             <div><label class="block text-xs font-bold text-slate-600 uppercase mb-1">CPF</label><input type="text" id="loginCPF" placeholder="12345678909" maxlength="11" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none"></div>
@@ -83,7 +85,7 @@
 <!-- ============ SISTEMA ============ -->
 <div id="screenSistema" class="hidden h-full w-full flex overflow-hidden">
     <aside class="w-64 gradient-header text-white hidden md:flex flex-col h-full shadow-2xl z-50 flex-shrink-0">
-        <div class="p-6 flex items-center gap-3 border-b border-white/10"><div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-lg">🏥</div><span class="text-lg font-extrabold tracking-tight">OCI <span class="text-blue-400">v3.0</span></span></div>
+        <div class="p-6 flex items-center gap-3 border-b border-white/10"><div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-lg">🏥</div><span class="text-lg font-extrabold tracking-tight">OCI <span class="text-blue-400">v3.1</span></span></div>
         <nav class="flex-1 mt-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-3">Monitoramento</div>
             <a href="#" onclick="switchTab('visao-geral')" class="sidebar-item active flex items-center gap-3 p-3 rounded-xl text-sm font-semibold" id="sidebar-visao-geral"><i class="fas fa-th-large w-4 text-blue-400"></i> Visão Geral</a>
@@ -114,7 +116,13 @@
             </div>
 
             <div id="content-visao-geral" class="tab-content active space-y-6">
+                <!-- CARDS ESTATÍSTICOS -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="statsGrid"></div>
+
+                <!-- 🚨 ALERTAS CRÍTICOS -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5" id="alertasGrid"></div>
+
+                <!-- GRÁFICOS -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"><h3 class="font-bold text-slate-800 mb-4"><i class="fas fa-chart-line text-blue-500"></i> Desempenho OCI</h3><div class="h-72"><canvas id="chartPerformance"></canvas></div></div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"><h3 class="font-bold text-slate-800 mb-4"><i class="fas fa-chart-pie text-purple-500"></i> Pacientes por Especialidade</h3><div class="h-72 flex justify-center"><canvas id="chartSpecialty"></canvas></div></div>
@@ -123,6 +131,8 @@
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"><h3 class="font-bold text-slate-800 mb-4"><i class="fas fa-chart-bar text-emerald-500"></i> Taxa de Comparecimento</h3><div class="h-64"><canvas id="chartComparecimento"></canvas></div></div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"><h3 class="font-bold text-slate-800 mb-4"><i class="fas fa-clock text-amber-500"></i> Tempo Médio OCI (dias)</h3><div class="h-64"><canvas id="chartTempoMedio"></canvas></div></div>
                 </div>
+
+                <!-- REGRAS + INDICADORES + PARÂMETROS -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5" id="infoCards"></div>
             </div>
 
@@ -161,22 +171,54 @@ async function carregarDados(){
 function carregarDadosMock(){
     especialidades=[{id:1,nome:'Cardiologia',icone:'🫀',exames_obrigatorios:'ECG; LAB; ERG',prazo_retorno_dias:60},{id:2,nome:'Ortopedia',icone:'🦴',exames_obrigatorios:'RX; USG; TOMO',prazo_retorno_dias:60},{id:3,nome:'Oncologia',icone:'🎗️',exames_obrigatorios:'BIO; AP; USG',prazo_retorno_dias:30},{id:4,nome:'Oftalmologia',icone:'👁️',exames_obrigatorios:'MAP; BIO; TONO',prazo_retorno_dias:60},{id:5,nome:'Otorrino',icone:'👂',exames_obrigatorios:'AUDIO; VIDEO',prazo_retorno_dias:60}];
     pacientes=[{id:1,nome:'João Silva',cpf:'11122233344'},{id:2,nome:'Maria Oliveira',cpf:'55566677788'},{id:3,nome:'Carlos Souza',cpf:'99988877766'},{id:4,nome:'Ana Beatriz',cpf:'33344455566'},{id:5,nome:'Roberto Lima',cpf:'77788899900'},{id:6,nome:'Fernanda Costa',cpf:'22233344455'}];
-    consultas=[{id:1,paciente_id:1,especialidade_id:1,status:'em_andamento',data_agendada:'2025-05-10'},{id:2,paciente_id:2,especialidade_id:2,status:'oci_fechada',data_agendada:'2025-04-15',data_realizada:'2025-04-15'},{id:3,paciente_id:3,especialidade_id:3,status:'aguardando_exame',data_agendada:'2025-05-20'},{id:4,paciente_id:4,especialidade_id:1,status:'apto_retorno',data_agendada:'2025-03-01'},{id:5,paciente_id:5,especialidade_id:2,status:'faltou',data_agendada:'2025-05-05'},{id:6,paciente_id:6,especialidade_id:4,status:'em_andamento',data_agendada:'2025-06-01'}];
+    consultas=[{id:1,paciente_id:1,especialidade_id:1,status:'em_andamento',data_agendada:'2025-03-10'},{id:2,paciente_id:2,especialidade_id:2,status:'oci_fechada',data_agendada:'2025-04-15',data_realizada:'2025-04-15'},{id:3,paciente_id:3,especialidade_id:3,status:'aguardando_exame',data_agendada:'2025-04-01'},{id:4,paciente_id:4,especialidade_id:1,status:'apto_retorno',data_agendada:'2025-02-15'},{id:5,paciente_id:5,especialidade_id:2,status:'faltou',data_agendada:'2025-05-05'},{id:6,paciente_id:6,especialidade_id:4,status:'em_andamento',data_agendada:'2025-06-01'}];
 }
 
 function atualizarTudo(){
+    const hoje = new Date();
     const totalAtivos=consultas.filter(c=>c.status==='em_andamento'||c.status==='aguardando_exame').length;
     const aptosRetorno=consultas.filter(c=>c.status==='apto_retorno').length;
     const ocisFechadas=consultas.filter(c=>c.status==='oci_fechada').length;
     const faltas=consultas.filter(c=>c.status==='faltou').length;
     const pctFechadas=consultas.length>0?Math.round((ocisFechadas/consultas.length)*100):0;
 
+    // STATS
     document.getElementById('statsGrid').innerHTML=`
         <div class="bg-white p-5 rounded-2xl shadow-sm stat-card-hover card-blue"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-users"></i></div></div><p class="text-slate-500 text-[11px] font-bold uppercase">Pacientes Ativos</p><h3 class="text-3xl font-extrabold text-slate-900 mt-1">${totalAtivos}</h3></div>
         <div class="bg-white p-5 rounded-2xl shadow-sm stat-card-hover card-amber"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-clock"></i></div></div><p class="text-slate-500 text-[11px] font-bold uppercase">Aptos Retorno</p><h3 class="text-3xl font-extrabold text-slate-900 mt-1">${aptosRetorno}</h3></div>
         <div class="bg-white p-5 rounded-2xl shadow-sm stat-card-hover card-emerald"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-check-double"></i></div></div><p class="text-slate-500 text-[11px] font-bold uppercase">OCIs Fechadas</p><h3 class="text-3xl font-extrabold text-slate-900 mt-1">${pctFechadas}%</h3></div>
         <div class="bg-white p-5 rounded-2xl shadow-sm stat-card-hover card-rose"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-user-slash"></i></div></div><p class="text-slate-500 text-[11px] font-bold uppercase">Absenteísmo</p><h3 class="text-3xl font-extrabold text-slate-900 mt-1">${faltas}</h3></div>`;
 
+    // 🚨 ALERTAS CRÍTICOS - NOVA SEÇÃO
+    const ocisPendentes = consultas.filter(c => {
+        if(c.status==='oci_fechada'||c.status==='faltou') return false;
+        const dias = Math.floor((hoje - new Date(c.data_agendada)) / (1000*60*60*24));
+        const e = especialidades.find(x=>x.id===c.especialidade_id);
+        const prazo = e ? e.prazo_retorno_dias : 60;
+        return dias > prazo;
+    });
+    const retornosVencidos = consultas.filter(c => {
+        if(c.status!=='apto_retorno') return false;
+        const dias = Math.floor((hoje - new Date(c.data_agendada)) / (1000*60*60*24));
+        return dias > 30;
+    });
+    const examesAtrasados = consultas.filter(c => c.status==='aguardando_exame').length;
+
+    document.getElementById('alertasGrid').innerHTML = `
+        <div class="bg-white p-5 rounded-2xl shadow-sm border ${ocisPendentes.length>0?'border-l-4 border-rose-500 alert-card':''}">
+            <h4 class="font-bold text-sm text-slate-800 mb-3 flex items-center gap-2"><i class="fas fa-exclamation-triangle text-rose-500"></i> OCIs Pendentes (+Prazo)</h4>
+            ${ocisPendentes.length>0?ocisPendentes.map(c=>{const p=pacientes.find(x=>x.id===c.paciente_id)||{};const e=especialidades.find(x=>x.id===c.especialidade_id)||{};const dias=Math.floor((hoje-new Date(c.data_agendata))/(1000*60*60*24));return`<div class="p-2.5 bg-rose-50 rounded-xl mb-2"><p class="text-xs font-bold text-rose-700">🔴 ${p.nome||'—'} - ${e.nome||'—'}</p><p class="text-[10px] text-rose-600">${dias} dias (Prazo: ${e.prazo_retorno_dias||60}d)</p></div>`;}).join(''):'<p class="text-xs text-emerald-600 font-bold">✅ Nenhuma OCI pendente</p>'}
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border ${examesAtrasados>0?'border-l-4 border-amber-500 alert-card':''}">
+            <h4 class="font-bold text-sm text-slate-800 mb-3 flex items-center gap-2"><i class="fas fa-flask text-amber-500"></i> Exames em Atraso</h4>
+            ${examesAtrasados>0?`<div class="p-2.5 bg-amber-50 rounded-xl mb-2"><p class="text-xs font-bold text-amber-700">🟡 ${examesAtrasados} exame(s) aguardando envio</p><p class="text-[10px] text-amber-600">Aguardando laboratório/paciente</p></div>`:'<p class="text-xs text-emerald-600 font-bold">✅ Todos exames em dia</p>'}
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border ${retornosVencidos.length>0?'border-l-4 border-orange-500 alert-card':''}">
+            <h4 class="font-bold text-sm text-slate-800 mb-3 flex items-center gap-2"><i class="fas fa-calendar-times text-orange-500"></i> Retornos Vencidos</h4>
+            ${retornosVencidos.length>0?retornosVencidos.map(c=>{const p=pacientes.find(x=>x.id===c.paciente_id)||{};return`<div class="p-2.5 bg-orange-50 rounded-xl mb-2"><p class="text-xs font-bold text-orange-700">🟠 ${p.nome||'—'}</p><p class="text-[10px] text-orange-600">Apto há ${Math.floor((hoje-new Date(c.data_agendata))/(1000*60*60*24))} dias</p></div>`;}).join(''):'<p class="text-xs text-emerald-600 font-bold">✅ Nenhum retorno vencido</p>'}
+        </div>`;
+
+    // TABELA MONITORAMENTO
     document.getElementById('tabelaMonitoramento').innerHTML=consultas.map((c,i)=>{
         const p=pacientes.find(x=>x.id===c.paciente_id)||{};
         const e=especialidades.find(x=>x.id===c.especialidade_id)||{};
@@ -191,10 +233,29 @@ function atualizarTudo(){
     document.getElementById('tabelaAbsenteismo').innerHTML=consultas.filter(c=>c.status==='faltou').map(c=>{const p=pacientes.find(x=>x.id===c.paciente_id)||{};const e=especialidades.find(x=>x.id===c.especialidade_id)||{};return`<tr><td class="px-6 py-3 font-bold">${p.nome||'—'}</td><td class="px-6 py-3">${formatarCPF(p.cpf||'')}</td><td class="px-6 py-3">${e.icone||''} ${e.nome||''}</td><td class="px-6 py-3">${formatarData(c.data_agendada)}</td><td class="px-6 py-3"><span class="px-2.5 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold">Faltou</span></td></tr>`;}).join('')||'<tr><td colspan="5" class="text-center py-8 text-slate-400">Nenhuma falta</td></tr>';
     document.getElementById('tabelaAPAC').innerHTML=consultas.filter(c=>c.status==='oci_fechada').map(c=>{const p=pacientes.find(x=>x.id===c.paciente_id)||{};const e=especialidades.find(x=>x.id===c.especialidade_id)||{};return`<tr><td class="px-6 py-3 font-bold">${p.nome||'—'}</td><td class="px-6 py-3">${formatarCPF(p.cpf||'')}</td><td class="px-6 py-3">${e.icone||''} ${e.nome||''}</td><td class="px-6 py-3">${formatarData(c.data_realizada||c.data_agendada)}</td><td class="px-6 py-3"><span class="px-2.5 py-1 bg-purple-50 text-purple-600 rounded-full text-xs font-bold">✅ Fechada</span></td></tr>`;}).join('')||'<tr><td colspan="5" class="text-center py-8 text-slate-400">Nenhuma OCI fechada</td></tr>';
 
-    document.getElementById('infoCards').innerHTML=`
-        <div class="bg-white p-5 rounded-2xl shadow-sm border card-purple"><h4 class="font-bold text-sm mb-3"><i class="fas fa-stethoscope text-purple-500"></i> Regras por Especialidade</h4><div class="space-y-2">${especialidades.map(e=>`<div class="flex justify-between p-2.5 bg-slate-50 rounded-xl"><span class="text-xs font-bold">${e.icone} ${e.nome}</span><span class="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg font-bold">${e.prazo_retorno_dias}d</span></div>`).join('')}</div></div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border card-blue"><h4 class="font-bold text-sm mb-3"><i class="fas fa-chart-bar text-blue-500"></i> Indicadores</h4><div class="space-y-3"><div><div class="flex justify-between mb-1"><span class="text-xs font-bold">Comparecimento</span><span class="text-xs font-bold text-emerald-600">${consultas.filter(c=>c.status!=='faltou').length}/${consultas.length}</span></div><div class="w-full bg-slate-100 h-1.5 rounded-full"><div class="bg-emerald-500 h-full rounded-full" style="width:${consultas.length>0?Math.round((consultas.filter(c=>c.status!=='faltou').length/consultas.length)*100):0}%"></div></div></div></div></div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border card-rose"><h4 class="font-bold text-sm mb-3"><i class="fas fa-bell text-rose-500"></i> Alertas</h4>${faltas>0?`<div class="p-3 border-l-4 border-rose-500 bg-rose-50 rounded-r-xl"><p class="text-xs font-bold text-rose-700">${faltas} falta(s)</p></div>`:'<p class="text-xs text-slate-400">✅ Nenhum alerta</p>'}</div>`;
+    // INFO CARDS - REGRAS + INDICADORES + PARÂMETROS
+    document.getElementById('infoCards').innerHTML = `
+        <div class="bg-white p-5 rounded-2xl shadow-sm border card-purple">
+            <h4 class="font-bold text-sm text-slate-800 mb-3"><i class="fas fa-stethoscope text-purple-500"></i> Regras por Especialidade</h4>
+            <div class="space-y-2">${especialidades.map(e=>`<div class="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl"><span class="text-xs font-bold text-slate-600">${e.icone} ${e.nome}</span><span class="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg font-bold">${e.exames_obrigatorios||'—'}</span></div>`).join('')}</div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border card-blue">
+            <h4 class="font-bold text-sm text-slate-800 mb-3"><i class="fas fa-chart-bar text-blue-500"></i> Indicadores</h4>
+            <div class="space-y-3">
+                <div><div class="flex justify-between mb-1"><span class="text-xs font-bold">Comparecimento</span><span class="text-xs font-bold text-emerald-600">${consultas.filter(c=>c.status!=='faltou').length}/${consultas.length}</span></div><div class="w-full bg-slate-100 h-1.5 rounded-full"><div class="bg-emerald-500 h-full rounded-full" style="width:${consultas.length>0?Math.round((consultas.filter(c=>c.status!=='faltou').length/consultas.length)*100):0}%"></div></div></div>
+                <div><div class="flex justify-between mb-1"><span class="text-xs font-bold">OCIs Fechadas</span><span class="text-xs font-bold text-blue-600">${pctFechadas}%</span></div><div class="w-full bg-slate-100 h-1.5 rounded-full"><div class="bg-blue-500 h-full rounded-full" style="width:${pctFechadas}%"></div></div></div>
+            </div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border card-emerald">
+            <h4 class="font-bold text-sm text-slate-800 mb-3"><i class="fas fa-cog text-emerald-500"></i> Parâmetros</h4>
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span>⏱️ Prazo Padrão</span><span class="font-bold text-emerald-600">60 dias</span></div>
+                <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span>🎗️ Prazo Oncologia</span><span class="font-bold text-rose-600">30 dias</span></div>
+                <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span>🎯 Meta OCI</span><span class="font-bold text-blue-600">90%</span></div>
+                <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span>⚠️ Alerta Amarelo</span><span class="font-bold text-amber-600">80% do prazo</span></div>
+                <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span>🔴 Alerta Vermelho</span><span class="font-bold text-rose-600">100% do prazo</span></div>
+            </div>
+        </div>`;
 
     renderizarGraficos();
 }
@@ -241,7 +302,6 @@ function switchTab(tabId){
 function logout(){ usuarioLogado=null; document.getElementById('screenSistema').classList.remove('active'); document.getElementById('screenSistema').style.display='none'; showScreen('screenLogin'); }
 
 document.addEventListener('DOMContentLoaded',()=>{
-    // LOGIN
     document.getElementById('btnLogin').addEventListener('click',async()=>{
         const nome=document.getElementById('loginNome').value.trim();
         const cpf=document.getElementById('loginCPF').value.trim();
@@ -249,43 +309,27 @@ document.addEventListener('DOMContentLoaded',()=>{
         if(!nome)return alert('Digite seu nome!');
         if(!cpf||!validarCPF(cpf))return alert('CPF inválido!');
         if(cpf==='12345678909'&&senha==='admin'){ usuarioLogado={nome,cpf,tipo:'admin'}; }
-        else {
-            showLoading();
-            const{data}=await db.from('usuarios_oci').select('*').eq('cpf',cpf);
-            hideLoading();
-            if(data&&data.length>0&&data[0].senha===senha){ usuarioLogado=data[0]; }
-            else if(senha==='admin'){ usuarioLogado={nome,cpf,tipo:'admin'}; }
-            else { return alert('❌ Senha incorreta!'); }
-        }
-        document.getElementById('screenLogin').classList.remove('active');
-        document.getElementById('screenLogin').style.display='none';
-        document.getElementById('screenSistema').classList.add('active');
-        document.getElementById('screenSistema').style.display='flex';
-        document.getElementById('sidebarNome').textContent=usuarioLogado.nome;
-        carregarDados();
+        else { showLoading(); const{data}=await db.from('usuarios_oci').select('*').eq('cpf',cpf); hideLoading(); if(data&&data.length>0&&data[0].senha===senha){ usuarioLogado=data[0]; } else if(senha==='admin'){ usuarioLogado={nome,cpf,tipo:'admin'}; } else { return alert('❌ Senha incorreta!'); } }
+        document.getElementById('screenLogin').classList.remove('active'); document.getElementById('screenLogin').style.display='none';
+        document.getElementById('screenSistema').classList.add('active'); document.getElementById('screenSistema').style.display='flex';
+        document.getElementById('sidebarNome').textContent=usuarioLogado.nome; carregarDados();
     });
 
-    // REDEFINIR SENHA ADMIN
     document.getElementById('btnResetAdmin').addEventListener('click',async()=>{
         const nome=document.getElementById('resetAdminNome').value.trim();
         const cpf=document.getElementById('resetAdminCPF').value.trim();
         const codigo=document.getElementById('resetAdminCodigo').value.trim();
         const nova=document.getElementById('resetAdminNovaSenha').value;
         const confirma=document.getElementById('resetAdminConfirma').value;
-        if(!nome)return alert('Digite seu nome!');
-        if(!cpf||!validarCPF(cpf))return alert('CPF inválido!');
-        if(codigo!==CODIGO_SEGURANCA)return alert('❌ Código de segurança incorreto! Use: '+CODIGO_SEGURANCA);
-        if(nova.length<4)return alert('Senha deve ter 4+ caracteres!');
-        if(nova!==confirma)return alert('Senhas não conferem!');
-        showLoading();
-        await db.from('usuarios_oci').upsert({nome,cpf,senha:nova,tipo:'admin'},{onConflict:'cpf'});
-        hideLoading();
-        alert('✅ Senha redefinida! Use a nova senha para entrar.');
-        showScreen('screenLogin');
+        if(!nome)return alert('Digite seu nome!'); if(!cpf||!validarCPF(cpf))return alert('CPF inválido!');
+        if(codigo!==CODIGO_SEGURANCA)return alert('❌ Código incorreto! Use: '+CODIGO_SEGURANCA);
+        if(nova.length<4)return alert('Senha deve ter 4+ caracteres!'); if(nova!==confirma)return alert('Senhas não conferem!');
+        showLoading(); await db.from('usuarios_oci').upsert({nome,cpf,senha:nova,tipo:'admin'},{onConflict:'cpf'}); hideLoading();
+        alert('✅ Senha redefinida!'); showScreen('screenLogin');
     });
 
     ['loginNome','loginCPF','loginSenha'].forEach(id=>{document.getElementById(id)?.addEventListener('keypress',e=>{if(e.key==='Enter')document.getElementById('btnLogin').click();});});
-    console.log('✅ Painel Admin OCI COMPLETO! 🔑 Redefinir senha funcionando!');
+    console.log('✅ Sistema OCI v3.1 - COM ALERTAS CRÍTICOS! 🚨');
 });
 </script>
 </body>
